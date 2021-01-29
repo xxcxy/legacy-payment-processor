@@ -156,6 +156,8 @@ AUTH0_URL=https://topcoder-dev.auth0.com/oauth/token
 AUTH0_AUDIENCE=https://m2m.topcoder-dev.com/
 ```
 
+If the above don't work, update these configs in `config/default.js`
+
 4. Once that is done, go to run the following command
 
 ```
