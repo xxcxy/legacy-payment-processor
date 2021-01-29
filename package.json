@@ -1,7 +1,7 @@
 {
-  "name": "legacy-challenge-processor",
+  "name": "legacy-payment-processor",
   "version": "1.0.0",
-  "description": "Topcoder - Legacy Challenge Processor",
+  "description": "Topcoder - Legacy payment Processor",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
@@ -12,7 +12,7 @@
     "e2e": "nyc --reporter=html --reporter=text mocha test/e2e/test.js --timeout 20000 --exit",
     "sync-terms": "node src/scripts/sync-terms.js"
   },
-  "repository": "https://github.com/topcoder-platform/legacy-challenge-processor",
+  "repository": "https://github.com/topcoder-platform/legacy-payment-processor",
   "author": "TCSCODER",
   "license": "none",
   "devDependencies": {

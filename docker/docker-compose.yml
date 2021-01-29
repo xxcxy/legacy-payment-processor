@@ -1,8 +1,8 @@
 version: '3'
 services:
-  legacy-challenge-processor:
-    image: legacy-challenge-processor:latest
-    container_name: legacy-challenge-processor
+  legacy-payment-processor:
+    image: legacy-payment-processor:latest
+    container_name: legacy-payment-processor
     build:
       context: ../
       dockerfile: docker/Dockerfile
