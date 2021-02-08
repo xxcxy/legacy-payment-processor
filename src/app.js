@@ -1,20 +1,18 @@
 /**
  * The application entry point
  */
-
-require('./bootstrap')
+global.Promise = require('bluebird')
 const _ = require('lodash')
 const config = require('config')
 const Kafka = require('no-kafka')
 const healthcheck = require('@topcoder-platform/topcoder-healthcheck-dropin')
 const logger = require('./common/logger')
 const helper = require('./common/helper')
-const ProcessorService = require('./services/ProcessorService')
+const processorService = require('./services/processorService')
 
 // Start kafka consumer
 logger.info('Starting kafka consumer')
 // create consumer
-
 const consumer = new Kafka.GroupConsumer(helper.getKafkaOptions())
 
 /*
@@ -46,29 +44,16 @@ const dataHandler = (messageSet, topic, partition) => Promise.each(messageSet, a
     return
   }
 
-  // do not trust the message payload
-  // the message.payload will be replaced with the data from the API
-  try {
-    const challengeUuid = _.get(messageJSON, 'payload.id')
-    if (_.isEmpty(challengeUuid)) {
-      throw new Error('Invalid payload')
-    }
-    const m2mToken = await helper.getM2MToken()
-    const v5Challenge = await helper.getRequest(`${config.V5_CHALLENGE_API_URL}/${challengeUuid}`, m2mToken)
-    // TODO : Cleanup. Pulling the billingAccountId from the payload, it's not part of the challenge object
-    messageJSON.payload = { billingAccountId: messageJSON.payload.billingAccountId, ...v5Challenge.body }
-  } catch (err) {
-    logger.debug('Failed to fetch challenge information')
-    logger.logFullError(err)
+  if (_.upperCase(_.get(messageJSON.payload, 'type')) !== 'TASK' || _.upperCase(_.get(messageJSON.payload, 'status')) !== 'COMPLETED') {
+    logger.info(`The message type ${_.get(messageJSON.payload, 'type')}, status ${_.get(messageJSON.payload, 'status')} doesn't match {type: 'Task', status: 'Completed'}.`)
+
+    // commit the message and ignore it
+    await consumer.commitOffset({ topic, partition, offset: m.offset })
+    return
   }
 
   try {
-    if (topic === config.CREATE_CHALLENGE_TOPIC) {
-      await ProcessorService.processCreate(messageJSON)
-    } else {
-      await ProcessorService.processUpdate(messageJSON)
-    }
-
+    await processorService.processUpdate(messageJSON)
     logger.debug('Successfully processed message')
   } catch (err) {
     logger.logFullError(err)
@@ -91,7 +76,7 @@ const check = () => {
   return connected
 }
 
-const topics = [config.CREATE_CHALLENGE_TOPIC, config.UPDATE_CHALLENGE_TOPIC]
+const topics = [config.UPDATE_CHALLENGE_TOPIC]
 
 consumer
   .init([{
@@ -107,7 +92,3 @@ consumer
     logger.info('Kick Start.......')
   })
   .catch((err) => logger.error(err))
-
-if (process.env.NODE_ENV === 'test') {
-  module.exports = consumer
-}

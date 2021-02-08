@@ -3,16 +3,20 @@
  * Interacts with InformixDB
  */
 const logger = require('../common/logger')
-const util = require('util')
 const helper = require('../common/helper')
 const IDGenerator = require('../common/idGenerator')
 
-const prizeIdGen = new IDGenerator('prize_id_seq')
+// the paymentDetailId's generator
+const paymentDetailIdGen = new IDGenerator('PAYMENT_DETAIL_SEQ')
+// the paymentId's generator
+const paymentIdGen = new IDGenerator('PAYMENT_SEQ')
 
-const QUERY_GET_CHALLENGE_PRIZES = 'SELECT prize_id, place, prize_amount, number_of_submissions FROM prize WHERE prize_type_id = %d and project_id = %d'
-const QUERY_UPDATE_CHALLENGE_PRIZE = 'UPDATE prize SET prize_amount = ?, number_of_submissions = ? WHERE prize_id = %d and project_id = %d'
-const QUERY_CREATE_CHALLENGE_PRIZE = 'INSERT INTO prize (prize_id, project_id, place, prize_amount, prize_type_id, number_of_submissions, create_user, create_date, modify_user, modify_date) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-const QUERY_DELETE_CHALLENGE_PRIZE = 'DELETE FROM prize WHERE prize_id = %d and project_id = %d'
+// the insert statement of payment detail
+const INSERT_PAYMENT_DETAIL = 'INSERT INTO payment_detail (payment_detail_id, net_amount,  gross_amount, payment_status_id, modification_rationale_id, payment_desc, payment_type_id, date_modified, date_due, payment_method_id, component_project_id, create_date, charity_ind, total_amount, installment_number, create_user) VALUES(?,?,?,?,?,?,?, CURRENT, CURRENT + INTERVAL (15) DAY(5) TO DAY,?,?, CURRENT,?,?,?,?)'
+// the insert statement of payment
+const INSERT_PAYMENT = 'INSERT INTO payment (payment_id, user_id, most_recent_detail_id, create_date, modify_date) VALUES(?,?,?, CURRENT, CURRENT)'
+// the insert statement of payment detail xref
+const INSERT_PAYMENT_DETAIL_XREF = 'INSERT INTO payment_detail_xref (payment_id, payment_detail_id) VALUES(?,?)'
 
 /**
  * Prepare Informix statement
@@ -21,114 +25,36 @@ const QUERY_DELETE_CHALLENGE_PRIZE = 'DELETE FROM prize WHERE prize_id = %d and 
  * @return {Object} Informix statement
  */
 async function prepare (connection, sql) {
-  // logger.debug(`Preparing SQL ${sql}`)
+  logger.debug(`Preparing SQL ${sql}`)
   const stmt = await connection.prepareAsync(sql)
   return Promise.promisifyAll(stmt)
 }
 
 /**
- * Gets the challenge phases from ifx
- * @param {Number} challengeLegacyId the legacy challenge ID
- * @param {Number} prizeTypeId the legacy challenge ID
+ * Create payment and save it to db
+ * @param {Object} payment the payment info
  */
-async function getChallengePrizes (challengeLegacyId, prizeTypeId) {
+async function createPayment (payment) {
   const connection = await helper.getInformixConnection()
-  let result = null
+  const paymentDetailId = await paymentDetailIdGen.getNextId()
+  const paymentId = await paymentIdGen.getNextId()
   try {
-    result = await connection.queryAsync(util.format(QUERY_GET_CHALLENGE_PRIZES, prizeTypeId, challengeLegacyId))
+    const insertDetail = await prepare(connection, INSERT_PAYMENT_DETAIL)
+    await insertDetail.executeAsync([paymentDetailId, payment.amount, payment.amount, payment.statusId, payment.modificationRationaleId, payment.desc, payment.typeId, payment.methodId, payment.projectId, payment.charityInd, payment.amount, payment.installmentNumber, payment.createUser])
+    const insertPayment = await prepare(connection, INSERT_PAYMENT)
+    await insertPayment.executeAsync([paymentId, payment.memberId, paymentDetailId])
+    const insertDetailXref = await prepare(connection, INSERT_PAYMENT_DETAIL_XREF)
+    await insertDetailXref.executeAsync([paymentId, paymentDetailId])
+    logger.info(`Payment ${paymentId} with detail ${paymentDetailId} has been inserted`)
   } catch (e) {
-    logger.error(`Error in 'getChallengePrizes' ${e}`)
-    throw e
-  } finally {
-    await connection.closeAsync()
-  }
-  return result
-}
-
-/**
- * Update a prize in IFX
- * @param {Number} phaseId the phase ID
- * @param {Number} challengeLegacyId the legacy challenge ID
- * @param {Number} prizeAmount the prize amount
- * @param {Number} numberOfSubmissions the number of submissions to receive the prize
- */
-async function updatePrize (prizeId, challengeLegacyId, prizeAmount, numberOfSubmissions) {
-  const connection = await helper.getInformixConnection()
-  let result = null
-  try {
-    // await connection.beginTransactionAsync()
-    const query = await prepare(connection, util.format(QUERY_UPDATE_CHALLENGE_PRIZE, prizeId, challengeLegacyId))
-    result = await query.executeAsync([prizeAmount, numberOfSubmissions])
-    // await connection.commitTransactionAsync()
-  } catch (e) {
-    logger.error(`Error in 'updatePrize' ${e}, rolling back transaction`)
+    logger.error(`Error in 'createPayment' ${e}, rolling back transaction`)
     await connection.rollbackTransactionAsync()
     throw e
   } finally {
-    logger.info(`Prize ${prizeId} has been updated`)
     await connection.closeAsync()
   }
-  return result
-}
-
-/**
- * Creates a new prize in IFX
- * @param {Number} challengeLegacyId the legacy challenge ID
- * @param {Number} place the placement
- * @param {Number} prizeAmount the prize amount
- * @param {Number} prizeTypeId the prize type ID
- * @param {Number} numberOfSubmissions the number of submissions that will receive the prize
- * @param {String} createdBy the creator user
- */
-async function createPrize (challengeLegacyId, place, prizeAmount, prizeTypeId, numberOfSubmissions, createdBy) {
-  const connection = await helper.getInformixConnection()
-  let result = null
-  let prizeId
-  try {
-    // await connection.beginTransactionAsync()
-    prizeId = await prizeIdGen.getNextId()
-    const currentDateIso = new Date().toISOString().replace('T', ' ').replace('Z', '').split('.')[0]
-    const query = await prepare(connection, QUERY_CREATE_CHALLENGE_PRIZE)
-    result = await query.executeAsync([prizeId, challengeLegacyId, place, prizeAmount, prizeTypeId, numberOfSubmissions, createdBy, currentDateIso, createdBy, currentDateIso])
-    // await connection.commitTransactionAsync()
-  } catch (e) {
-    logger.error(`Error in 'createPrize' ${e}, rolling back transaction`)
-    await connection.rollbackTransactionAsync()
-    throw e
-  } finally {
-    logger.info(`Prize ${prizeId} has been updated`)
-    await connection.closeAsync()
-  }
-  return result
-}
-
-/**
- * Deletes a prize from IFX
- * @param {Number} challengeLegacyId the legacy challenge ID
- * @param {Number} prizeId the prize ID
- */
-async function deletePrize (challengeLegacyId, prizeId) {
-  const connection = await helper.getInformixConnection()
-  let result = null
-  try {
-    // await connection.beginTransactionAsync()
-    const query = await prepare(connection, QUERY_DELETE_CHALLENGE_PRIZE)
-    result = await query.executeAsync([prizeId, challengeLegacyId])
-    // await connection.commitTransactionAsync()
-  } catch (e) {
-    logger.error(`Error in 'deletePrize' ${e}, rolling back transaction`)
-    await connection.rollbackTransactionAsync()
-    throw e
-  } finally {
-    logger.info(`Prize ${prizeId} has been deleted`)
-    await connection.closeAsync()
-  }
-  return result
 }
 
 module.exports = {
-  getChallengePrizes,
-  updatePrize,
-  createPrize,
-  deletePrize
+  createPayment
 }

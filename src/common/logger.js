@@ -9,6 +9,7 @@ const config = require('config')
 const getParams = require('get-parameter-names')
 const { createLogger, format, transports } = require('winston')
 
+// The logger object
 const logger = createLogger({
   level: config.LOG_LEVEL,
   transports: [
