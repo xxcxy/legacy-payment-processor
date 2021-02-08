@@ -4,20 +4,14 @@
 
 const _ = require('lodash')
 const config = require('config')
-const ifxnjs = require('ifxnjs')
+const { Pool } = require('ifxnjs')
 const request = require('superagent')
 const m2mAuth = require('tc-core-library-js').auth.m2m
-const busApi = require('@topcoder-platform/topcoder-bus-api-wrapper')
-const constants = require('../constants')
-const logger = require('../common/logger')
 const m2m = m2mAuth(_.pick(config, ['AUTH0_URL', 'AUTH0_AUDIENCE', 'TOKEN_CACHE_TIME', 'AUTH0_PROXY_SERVER_URL']))
 
-const Pool = ifxnjs.Pool
+// Db connection pool
 const pool = Promise.promisifyAll(new Pool())
 pool.setMaxPoolSize(config.get('INFORMIX.POOL_MAX_SIZE'))
-
-// Bus API Client
-let busApiClient
 
 /**
  * Get Informix connection using the configured parameters
@@ -65,7 +59,6 @@ async function getM2MToken () {
  * @returns {Object} the response
  */
 async function patchRequest (url, body, m2mToken) {
-  logger.debug(`Patch Request Body: ${JSON.stringify(body)}`)
   return request
     .patch(url)
     .send(body)
@@ -121,55 +114,28 @@ async function postRequest (url, body, m2mToken) {
 }
 
 /**
- * Get Bus API Client
- * @return {Object} Bus API Client Instance
+ * Function to get userId
+ * @param {String} handle the user's handle
+ * @returns {String} the userId
  */
-function getBusApiClient () {
-  // if there is no bus API client instance, then create a new instance
-  if (!busApiClient) {
-    busApiClient = busApi(_.pick(config,
-      ['AUTH0_URL', 'AUTH0_AUDIENCE', 'TOKEN_CACHE_TIME',
-        'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET', 'BUSAPI_URL',
-        'KAFKA_ERROR_TOPIC', 'AUTH0_PROXY_SERVER_URL']))
-  }
-
-  return busApiClient
-}
-
-/**
- * Post bus event.
- * @param {String} topic the event topic
- * @param {Object} payload the event payload
- */
-async function postBusEvent (topic, payload) {
-  const client = getBusApiClient()
-  await client.postEvent({
-    topic,
-    originator: constants.EVENT_ORIGINATOR,
-    timestamp: new Date().toISOString(),
-    'mime-type': constants.EVENT_MIME_TYPE,
-    payload
-  })
-}
-
-async function forceV4ESFeeder (legacyId) {
+async function getUserId (handle) {
   const token = await getM2MToken()
-  const body = {
-    param: {
-      challengeIds: [legacyId]
-    }
-  }
-  await request.put(`${config.V4_ES_FEEDER_API_URL}`).send(body).set({ Authorization: `Bearer ${token}` })
+  const url = `${config.TC_API}/members/${handle}?fields=userId`
+
+  const res = await request
+    .get(url)
+    .set('Authorization', `Bearer ${token}`)
+    .set('Content-Type', 'application/json')
+    .set('Accept', 'application/json')
+  return res.body.userId
 }
 
 module.exports = {
   getInformixConnection,
   getKafkaOptions,
-  getM2MToken,
   patchRequest,
   getRequest,
   putRequest,
   postRequest,
-  postBusEvent,
-  forceV4ESFeeder
+  getUserId
 }
