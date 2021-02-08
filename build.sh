@@ -1,6 +1,7 @@
 #!/bin/bash
 set -eo pipefail
 UPDATE_CACHE=""
+echo "">.env
 docker-compose -f docker/docker-compose.yml build legacy-payment-processor
 docker create --name app legacy-payment-processor:latest
 
