@@ -70,7 +70,7 @@ processUpdate.schema = {
         prizes: Joi.array().items(Joi.object().keys({
           value: Joi.number().positive().required()
         }).unknown(true))
-      }).unknown(true)).min(2),
+      }).unknown(true)).min(1),
       type: Joi.string().required(),
       status: Joi.string().required(),
       createdBy: Joi.string().required()
