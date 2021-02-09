@@ -16,7 +16,7 @@ const INSERT_PAYMENT_DETAIL = 'INSERT INTO payment_detail (payment_detail_id, ne
 // the insert statement of payment
 const INSERT_PAYMENT = 'INSERT INTO payment (payment_id, user_id, most_recent_detail_id, create_date, modify_date) VALUES(?,?,?, CURRENT, CURRENT)'
 // the insert statement of payment detail xref
-const INSERT_PAYMENT_DETAIL_XREF = 'INSERT INTO payment_detail_xref (payment_id, payment_detail_id) VALUES(?,?)'
+const INSERT_PAYMENT_DETAIL_XREF = 'INSERT INTO payment_detail_xref1 (payment_id, payment_detail_id) VALUES(?,?)'
 
 /**
  * Prepare Informix statement

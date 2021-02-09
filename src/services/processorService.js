@@ -21,7 +21,7 @@ async function processUpdate (message) {
     // the connection statement can't accept undefined, so set it to null
     message.payload.legacyId = null
   }
-  const projectId = _.get(message, 'payload.legacyId')
+  const challengeId = _.get(message, 'payload.legacyId')
 
   // the same properties of userPayment and copilotPayment
   const basePayment = {
@@ -44,7 +44,7 @@ async function processUpdate (message) {
     }, basePayment)
     await paymentService.createPayment(userPayment)
   } catch (error) {
-    logger.error(`For project ${projectId}, user prize info missing: ${error}`)
+    logger.error(`For challenge ${challengeId}, user prize info missing: ${error}`)
   }
 
   // the properties of copilotPayment
@@ -57,7 +57,7 @@ async function processUpdate (message) {
     }, basePayment)
     await paymentService.createPayment(copilotPayment)
   } catch (error) {
-    logger.debug(`For project ${projectId}, no copilot payment avaiable`)
+    logger.debug(`For challenge ${challengeId}, no copilot payment avaiable`)
   }
 }
 
