@@ -21,6 +21,8 @@ async function processUpdate (message) {
     // the connection statement can't accept undefined, so set it to null
     message.payload.legacyId = null
   }
+  const projectId = _.get(message, 'payload.legacyId')
+
   // the same properties of userPayment and copilotPayment
   const basePayment = {
     statusId: config.PAYMENT_STATUS_ID,
@@ -33,23 +35,30 @@ async function processUpdate (message) {
   }
 
   // the properties of userPayment
-  const userPayment = _.assign({
-    memberId: message.payload.task.memberId,
-    amount: _.head(_.find(message.payload.prizeSets, ['type', 'placement']).prizes).value,
-    desc: `Task - ${message.payload.name} - First Place`,
-    typeId: config.WINNER_PAYMENT_TYPE_ID
-  }, basePayment)
+  try {
+    const userPayment = _.assign({
+      memberId: message.payload.task.memberId,
+      amount: _.head(_.find(message.payload.prizeSets, ['type', 'placement']).prizes).value,
+      desc: `Task - ${message.payload.name} - First Place`,
+      typeId: config.WINNER_PAYMENT_TYPE_ID
+    }, basePayment)
+    await paymentService.createPayment(userPayment)
+  } catch (error) {
+    logger.error(`For project ${projectId}, user prize info missing: ${error}`)
+  }
 
   // the properties of copilotPayment
-  const copilotPayment = _.assign({
-    memberId: createUserId,
-    amount: _.head(_.find(message.payload.prizeSets, ['type', 'copilot']).prizes).value,
-    desc: `Task - ${message.payload.name} - Copilot`,
-    typeId: config.COPILOT_PAYMENT_TYPE_ID
-  }, basePayment)
-
-  await paymentService.createPayment(userPayment)
-  await paymentService.createPayment(copilotPayment)
+  try {
+    const copilotPayment = _.assign({
+      memberId: createUserId,
+      amount: _.head(_.find(message.payload.prizeSets, ['type', 'copilot']).prizes).value,
+      desc: `Task - ${message.payload.name} - Copilot`,
+      typeId: config.COPILOT_PAYMENT_TYPE_ID
+    }, basePayment)
+    await paymentService.createPayment(copilotPayment)
+  } catch (error) {
+    logger.debug(`For project ${projectId}, no copilot payment avaiable`)
+  }
 }
 
 processUpdate.schema = {
